@@ -10,6 +10,7 @@ import time
 from astral import LocationInfo
 from astral.sun import sun
 import math
+import threading
 
 db_connection = sqlite3.connect("maksim.db")
 
@@ -22,6 +23,7 @@ db_connection.execute('''CREATE TABLE IF NOT EXISTS parameter_names
          timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP);''')
 
 param_names_farm = ["farm_light",
+                "pump_state",
                 "farm_light_off_time",
                 "alarm_mon_time",
                 "alarm_mon_state",
@@ -67,9 +69,10 @@ for row in db_cursor:
 db_connection.commit()
 db_connection.close()
 
-pump_state = 0
 
 app = FastAPI()
+
+app.type = "00"
 
 origins = ["*"]
 
@@ -88,7 +91,7 @@ def create_db_connection():
 
 
 @app.get("/farm_params")
-def get_farm_params():
+async def get_farm_params():
     [db_cursor, db_connection] = create_db_connection()
 
     param_names_string = f"{param_names_farm}"[1:-1]
@@ -110,22 +113,30 @@ def get_farm_params():
     finally:
         db_connection.close()
 
-
 @app.get("/turn_pump_on/{seconds}")
 async def turn_pump_on(seconds: int):
-    pump_state = 1023
-    print(f"tuning pump on for {seconds}s")
-    time.sleep(seconds)
-    print("aaaand off!")
-    pump_state = 0
+    [db_cursor, db_connection] = create_db_connection()
+    insert_to_db("pump_state", 1023, db_connection, db_cursor)
+    print(f"turning pump on for {seconds}s")
+    t = threading.Thread(target=turn_off, args=(seconds,))
+    t.start()
     return {"done": 1}
+
+def turn_off(seconds):
+    print(f"wait {seconds}")
+    time.sleep(seconds)
+    print("off")
+    [db_cursor, db_connection] = create_db_connection()
+    insert_to_db("pump_state", 0, db_connection, db_cursor)
+
 
 class Param_dict(BaseModel):
     params: Dict[str, Union[float, str]]
 
 
-def insert_to_db(name, value, connection, cursor):
-    selectstring = f"SELECT id FROM parameter_names WHERE name is '{key}';"
+def insert_to_db(name, value, db_connection, db_cursor):
+    now = datetime.datetime.now()
+    selectstring = f"SELECT id FROM parameter_names WHERE name is '{name}';"
     db_cursor.execute(selectstring)
     id = db_cursor.fetchone()[0]
 
@@ -184,7 +195,7 @@ def time_to_number(time):
 
 
 @app.get("/farm_params_esp", response_class=PlainTextResponse)
-def get_farm_params_esp():
+async def get_farm_params_esp():
     [db_cursor, db_connection] = create_db_connection()
 
     #get light
@@ -195,6 +206,10 @@ def get_farm_params_esp():
     selectstring = f"SELECT value FROM parameter_names WHERE name = 'farm_light_off_time';"
     db_cursor.execute(selectstring)
     farm_light_off_time = db_cursor.fetchone()[0]
+
+    selectstring = f"SELECT value FROM parameter_names WHERE name = 'pump_state';"
+    db_cursor.execute(selectstring)
+    pump_state = db_cursor.fetchone()[0]
 
     now = datetime.datetime.now()
     #now = now.replace(hour=22, minute=45)
@@ -269,6 +284,7 @@ def get_farm_params_esp():
     #if light is 0, lightrise then lightset_sunrise if necessary, then lightrise_sunset
     print("")
     if not light_db:
+        light = 0
         print(f"start lightrise: {start_time_lightrise}")
         print(f"lightrise: {is_lightrise}, light coming on")
         if is_lightrise:
@@ -324,5 +340,7 @@ def get_farm_params_esp():
     
     print(f"brightness: {light/1023}")
     print(f"calculated pwm: {light_fixed}")
+
+    print(f"pump: {pump_state}")
              
     return f"{int(light_fixed)},{int(pump_state)}"
