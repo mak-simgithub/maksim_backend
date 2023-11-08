@@ -339,7 +339,7 @@ async def get_farm_params_esp():
         watering_duration = get_from_db("watering_duration", db_cursor)
         watering_period = get_from_db("watering_period", db_cursor)
         if not now.hour%watering_period:
-            insert_to_db("pump_state", 1023, db_connection, db_cursor)
+            insert_to_db("pump_state", 0, db_connection, db_cursor)
             print(f"turning pump on for {watering_duration}s")
             t = threading.Thread(target=turn_off, args=(watering_duration,))
             t.start()
