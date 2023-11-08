@@ -70,6 +70,45 @@ db_connection.commit()
 db_connection.close()
 
 
+def insert_to_db(name, value, db_connection, db_cursor):
+    now = datetime.datetime.now()
+    selectstring = f"SELECT id FROM parameter_names WHERE name is '{name}';"
+    db_cursor.execute(selectstring)
+    id = db_cursor.fetchone()[0]
+
+    updatestring_names = f"UPDATE parameter_names SET value = {value}, timestamp = '{now}' WHERE id = {id};"
+    print(updatestring_names)
+    db_cursor.execute(updatestring_names)
+
+    inserstring_values = f"INSERT INTO parameter_values (type, value, timestamp) VALUES (?,?,?);"
+    values_values = (id, value, now)
+    db_cursor.execute(inserstring_values,values_values)
+
+    db_connection.commit()
+
+
+def get_from_db(name, db_cursor):
+    selectstring = f"SELECT value FROM parameter_names WHERE name = '{name}';"
+    db_cursor.execute(selectstring)
+    return db_cursor.fetchone()[0]
+
+def number_to_time(time_number):
+    number_string = f"{int(time_number)}"
+    if (len(number_string) < 2):
+        number_string_parsed = "00:0" + number_string
+    elif (len(number_string) < 3):
+        number_string_parsed = "00:" + number_string
+    elif (len(number_string) < 4):
+        number_string_parsed = "0" + number_string[0] + ":" + number_string[1:3]
+    else:
+        number_string_parsed = number_string[0:2] + ":" + number_string[2:4]
+    return number_string_parsed
+
+
+def time_to_number(time):
+    number = int(time.split(":")[0])*100+int(time.split(":")[1])
+    return number
+
 app = FastAPI()
 
 app.type = "00"
@@ -130,25 +169,10 @@ def turn_off(seconds):
     insert_to_db("pump_state", 0, db_connection, db_cursor)
 
 
+
 class Param_dict(BaseModel):
     params: Dict[str, Union[float, str]]
 
-
-def insert_to_db(name, value, db_connection, db_cursor):
-    now = datetime.datetime.now()
-    selectstring = f"SELECT id FROM parameter_names WHERE name is '{name}';"
-    db_cursor.execute(selectstring)
-    id = db_cursor.fetchone()[0]
-
-    updatestring_names = f"UPDATE parameter_names SET value = {value}, timestamp = '{now}' WHERE id = {id};"
-    print(updatestring_names)
-    db_cursor.execute(updatestring_names)
-
-    inserstring_values = f"INSERT INTO parameter_values (type, value, timestamp) VALUES (?,?,?);"
-    values_values = (id, value, now)
-    db_cursor.execute(inserstring_values,values_values)
-
-    db_connection.commit()
 
 @app.post("/params")
 async def write_params(param_dict: Param_dict):
@@ -176,40 +200,16 @@ async def write_params(param_dict: Param_dict):
         db_connection.close()
 
 
-def number_to_time(time_number):
-    number_string = f"{int(time_number)}"
-    if (len(number_string) < 2):
-        number_string_parsed = "00:0" + number_string
-    elif (len(number_string) < 3):
-        number_string_parsed = "00:" + number_string
-    elif (len(number_string) < 4):
-        number_string_parsed = "0" + number_string[0] + ":" + number_string[1:3]
-    else:
-        number_string_parsed = number_string[0:2] + ":" + number_string[2:4]
-    return number_string_parsed
-
-
-def time_to_number(time):
-    number = int(time.split(":")[0])*100+int(time.split(":")[1])
-    return number
-
 
 @app.get("/farm_params_esp", response_class=PlainTextResponse)
 async def get_farm_params_esp():
     [db_cursor, db_connection] = create_db_connection()
 
     #get light
-    selectstring = f"SELECT value FROM parameter_names WHERE name = 'farm_light';"
-    db_cursor.execute(selectstring)
-    light_db = db_cursor.fetchone()[0]
 
-    selectstring = f"SELECT value FROM parameter_names WHERE name = 'farm_light_off_time';"
-    db_cursor.execute(selectstring)
-    farm_light_off_time = db_cursor.fetchone()[0]
+    light_db = get_from_db("farm_light", db_cursor)
 
-    selectstring = f"SELECT value FROM parameter_names WHERE name = 'pump_state';"
-    db_cursor.execute(selectstring)
-    pump_state = db_cursor.fetchone()[0]
+    farm_light_off_time = get_from_db("farm_light_off_time", db_cursor)
 
     now = datetime.datetime.now()
     #now = now.replace(hour=22, minute=45)
@@ -239,13 +239,9 @@ async def get_farm_params_esp():
 
     day = day_translate[now.weekday()]
 
-    selectstring = f"SELECT value FROM parameter_names WHERE name = 'alarm_{day}_state';"
-    db_cursor.execute(selectstring)
-    alarm_state = bool(db_cursor.fetchone()[0])
+    alarm_state = get_from_db(f"alarm_{day}_state", db_cursor)
 
-    selectstring = f"SELECT value FROM parameter_names WHERE name = 'alarm_{day}_time';"
-    db_cursor.execute(selectstring)
-    alarm_time = db_cursor.fetchone()[0]
+    alarm_time = get_from_db(f"alarm_{day}_time", db_cursor)
 
     time_number = int(f"{int(alarm_time)}")
     if time_number < 100:
@@ -329,8 +325,6 @@ async def get_farm_params_esp():
         if not light:
             if not light_db == light:
                 insert_to_db("farm_light", 0, db_connection, db_cursor)
-    
-    db_connection.close()
 
 
     light = min([1023, light])
@@ -341,6 +335,19 @@ async def get_farm_params_esp():
     print(f"brightness: {light/1023}")
     print(f"calculated pwm: {light_fixed}")
 
+    if is_lightrise and not is_lightset:
+        watering_duration = get_from_db("watering_duration", db_cursor)
+        watering_period = get_from_db("watering_period", db_cursor)
+        if not now.hour%watering_period:
+            insert_to_db("pump_state", 1023, db_connection, db_cursor)
+            print(f"turning pump on for {watering_duration}s")
+            t = threading.Thread(target=turn_off, args=(watering_duration,))
+            t.start()
+
+    pump_state = get_from_db("pump_state", db_cursor)
+
     print(f"pump: {pump_state}")
+
+    db_connection.close()
              
     return f"{int(light_fixed)},{int(pump_state)}"
