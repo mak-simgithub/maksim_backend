@@ -127,8 +127,10 @@ void loop()
 
     HTTPClient http;  //Declare an object of class HTTPClient
 
-    //int ans =  http.begin("http://lucapi.local/farm.log");//SHA-1
-    int ans =  http.begin("http://192.168.0.49/farm.log");//SHA-1
+    
+    //int ans =  http.begin("http://192.168.0.49/farm.log");//SHA-1
+    int ans =  http.begin("http://lucapi.local:8000/farm_params_esp");//SHA-1
+
     Serial.print("http begin: "); //should be 1
     Serial.println(ans);
     
