@@ -77,7 +77,6 @@ def insert_to_db(name, value, db_connection, db_cursor):
     id = db_cursor.fetchone()[0]
 
     updatestring_names = f"UPDATE parameter_names SET value = {value}, timestamp = '{now}' WHERE id = {id};"
-    print(updatestring_names)
     db_cursor.execute(updatestring_names)
 
     inserstring_values = f"INSERT INTO parameter_values (type, value, timestamp) VALUES (?,?,?);"
@@ -338,8 +337,8 @@ async def get_farm_params_esp():
     if is_lightrise and not is_lightset:
         watering_duration = get_from_db("watering_duration", db_cursor)
         watering_period = get_from_db("watering_period", db_cursor)
-        if not now.hour%watering_period:
-            insert_to_db("pump_state", 0, db_connection, db_cursor)
+        if not now.hour%watering_period and now.minute == 50 and now.second < 2:
+            insert_to_db("pump_state", 1023, db_connection, db_cursor)
             print(f"turning pump on for {watering_duration}s")
             t = threading.Thread(target=turn_off, args=(watering_duration,))
             t.start()
