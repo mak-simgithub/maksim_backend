@@ -337,7 +337,7 @@ async def get_farm_params_esp():
     if is_lightrise and not is_lightset:
         watering_duration = get_from_db("watering_duration", db_cursor)
         watering_period = get_from_db("watering_period", db_cursor)
-        if not now.hour%watering_period and now.minute == 50 and now.second < 2:
+        if not now.hour%watering_period and now.minute == 50 and now.second < watering_duration-1:
             insert_to_db("pump_state", 1023, db_connection, db_cursor)
             print(f"turning pump on for {watering_duration}s")
             t = threading.Thread(target=turn_off, args=(watering_duration,))
@@ -348,5 +348,10 @@ async def get_farm_params_esp():
     print(f"pump: {pump_state}")
 
     db_connection.close()
+
+    if light_fixed > 512:
+        light_fixed = 1023
+    else:
+        light_fixed = 0
              
     return f"{int(light_fixed)},{int(pump_state)}"

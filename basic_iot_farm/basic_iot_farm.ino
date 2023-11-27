@@ -87,7 +87,7 @@ void setup()
   pinMode(pump_pin, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
 
-  analogWriteFreq(40000);
+  analogWriteFreq(16000);
   
   analogWrite(pump_pin, 0);
   analogWrite(lamp_pin, 0);
