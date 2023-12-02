@@ -264,10 +264,10 @@ async def get_farm_params_esp():
     start_time_lightset = farm_light_off_time-datetime.timedelta(minutes = duration_transitions_minute)
 
 
-    is_lightrise = (start_time_lightrise-now).total_seconds()/60<30 and alarm_state
-    is_sunrise = (start_time_sunrise-now).total_seconds()/60<30
-    is_sunset = (start_time_sunset-now).total_seconds()/60<30
-    is_lightset = (start_time_lightset-now).total_seconds()/60<30
+    is_lightrise = (start_time_lightrise-now).total_seconds()/60<duration_transitions_minute and alarm_state
+    is_sunrise = (start_time_sunrise-now).total_seconds()/60<duration_transitions_minute
+    is_sunset = (start_time_sunset-now).total_seconds()/60<duration_transitions_minute
+    is_lightset = (start_time_lightset-now).total_seconds()/60<duration_transitions_minute
 
 
     print(f"light db: {bool(light_db)}")
@@ -334,7 +334,12 @@ async def get_farm_params_esp():
     print(f"brightness: {light/1023}")
     print(f"calculated pwm: {light_fixed}")
 
-    if is_lightrise and not is_lightset:
+    if alarm_state:
+        ok_to_pump_time = start_time_lightrise + datetime.timedelta(minutes = duration_transitions_minute)
+    else:
+        ok_to_pump_time = now.replace(hour=12, minute=0)
+
+    if (ok_to_pump_time-now).total_seconds() < 0 and alarm_state and not is_lightset:
         watering_duration = get_from_db("watering_duration", db_cursor)
         watering_period = get_from_db("watering_period", db_cursor)
         if not now.hour%watering_period and now.minute == 50 and now.second < watering_duration-1:
