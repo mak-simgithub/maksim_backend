@@ -339,7 +339,7 @@ async def get_farm_params_esp():
     else:
         ok_to_pump_time = now.replace(hour=12, minute=0)
 
-    if (ok_to_pump_time-now).total_seconds() < 0 and alarm_state and not is_lightset:
+    if (ok_to_pump_time-now).total_seconds() < 0 and not is_lightset:
         watering_duration = get_from_db("watering_duration", db_cursor)
         watering_period = get_from_db("watering_period", db_cursor)
         if not now.hour%watering_period and now.minute == 50 and now.second < watering_duration-1:
