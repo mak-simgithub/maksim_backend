@@ -354,9 +354,9 @@ async def get_farm_params_esp():
 
     db_connection.close()
 
-    if light_fixed > 512:
-        light_fixed = 1023
-    else:
-        light_fixed = 0
+    #if light_fixed > 512:
+    #    light_fixed = 1023
+    #else:
+    #    light_fixed = 0
              
     return f"{int(light_fixed)},{int(pump_state)}"
